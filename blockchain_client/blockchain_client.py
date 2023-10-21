@@ -9,18 +9,18 @@ from Crypto.Signature import PKCS1_v1_5
 
 
 class Transaction:
-    def __init__(self, sender_public_key, sender_private_key, recipient_address, value):
+    def __init__(self, sender_public_key, sender_private_key, recipient_public_key, amount):
         self.sender_public_key = sender_public_key
         self.sender_private_key = sender_private_key
-        self.recipient_address = recipient_address
-        self.value = value
+        self.recipient_public_key = recipient_public_key
+        self.amount = amount
 
     def to_dict(self):
         return OrderedDict({
             'sender_public_key': self.sender_public_key,
             'sender_private_key': self.sender_private_key,
-            'recipient_address': self.recipient_address,
-            'value': self.value,
+            'recipient_public_key': self.recipient_public_key,
+            'amount': self.amount,
         })
 
     def sign_transaction(self):
