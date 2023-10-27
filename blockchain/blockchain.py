@@ -1,7 +1,13 @@
+from Crypto.Hash import SHA
+from Crypto.PublicKey import RSA
 from flask import Flask, render_template, jsonify, request
 from time import time
 from flask_cors import CORS
 from collections import OrderedDict
+import binascii
+from Crypto.Signature import PKCS1_v1_5
+
+MINING_SENDER = "blockchain"
 
 
 class Blockchain:
@@ -26,22 +32,36 @@ class Blockchain:
         self.transactions = []
         self.chain.append(block)
 
-    def submit_transaction(self, sender_public_key, recipient_public_key, signature, amount):
-        # TODO: reward miner
-        # TODO: Signature validation
+    def verify_transaction_signature(self, sender_public_key, signature, transaction):
+        public_key = RSA.importKey(binascii.unhexlify(sender_public_key))
+        verifier = PKCS1_v1_5.new(public_key)
+        hash = SHA.new(str(transaction).encode('utf8'))
+        try:
+            verifier.verify(hash, binascii.unhexlify(signature))
+            return True
+        except ValueError:
+            return False
 
+    def submit_transaction(self, sender_public_key, recipient_public_key, signature, amount):
+        # Signature validation
         transaction = OrderedDict({
             'sender_public_key': sender_public_key,
             'recipient_public_key': recipient_public_key,
-            'signature': signature,
             'amount': amount,
         })
-        signature_verification = True
-        if signature_verification:
+
+        # reward for miner
+        if sender_public_key == MINING_SENDER:
             self.transactions.append(transaction)
             return len(self.chain) + 1
         else:
-            return False
+            # Transaction from wallet to another wallet
+            signature_verification = self.verify_transaction_signature(sender_public_key, signature, transaction)
+            if signature_verification:
+                self.transactions.append(transaction)
+                return len(self.chain) + 1
+            else:
+                return False
 
 
 blockchain = Blockchain()
@@ -60,7 +80,12 @@ def index():
 def transactions_new():
     values = request.form
 
-    # TODO: check required fields
+    # check required fields [Notes: This is just a demo, not production code, so not checking thoroughly, just doing
+    # basic checks]
+    required = ['confirmation_sender_public_key', 'confirmation_recipient_public_key', 'transaction_signature', 'confirmation_amount']
+    if not all(k in values for k in required):
+        return 'Missing Values', 400
+
     transaction_results = blockchain.submit_transaction(values['confirmation_sender_public_key'],
                                                         values['confirmation_recipient_public_key'],
                                                         values['transaction_signature'], values['confirmation_amount'])
