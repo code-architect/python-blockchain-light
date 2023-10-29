@@ -76,6 +76,13 @@ def index():
     return render_template('./index.html')
 
 
+@app.route("/transactions_get", methods=['GET'])
+def get_transactions():
+    transactions = blockchain.transactions
+    response = {"transactions": transactions}
+    return jsonify(response), 200
+
+
 @app.route("/transactions_new", methods=['POST'])
 def transactions_new():
     values = request.form
