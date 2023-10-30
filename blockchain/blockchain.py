@@ -1,3 +1,4 @@
+from uuid import uuid4
 from Crypto.Hash import SHA
 from Crypto.PublicKey import RSA
 from flask import Flask, render_template, jsonify, request
@@ -8,12 +9,14 @@ import binascii
 from Crypto.Signature import PKCS1_v1_5
 
 MINING_SENDER = "blockchain"
+MINING_REWARD = 1
 
 
 class Blockchain:
     def __init__(self):
         self.transactions = []
         self.chain = []
+        self.node_id = str(uuid4()).replace('-', '')
         # create the genesis block
         self.create_block(0, '00')
 
@@ -31,6 +34,7 @@ class Blockchain:
         # reset the current list of transactions
         self.transactions = []
         self.chain.append(block)
+        return block
 
     def verify_transaction_signature(self, sender_public_key, signature, transaction):
         public_key = RSA.importKey(binascii.unhexlify(sender_public_key))
@@ -41,6 +45,12 @@ class Blockchain:
             return True
         except ValueError:
             return False
+
+    def proof_of_work(self):
+        return 123
+
+    def hash(self, block):
+        return 'abs'
 
     def submit_transaction(self, sender_public_key, recipient_public_key, signature, amount):
         # Signature validation
@@ -83,13 +93,33 @@ def get_transactions():
     return jsonify(response), 200
 
 
+@app.route("/mine", methods=['GET'])
+def mine():
+    # We run the proof of work algo
+    nonce = blockchain.proof_of_work()
+    blockchain.submit_transaction(sender_public_key=MINING_SENDER, recipient_public_key=blockchain.node_id,
+                                  signature='', amount=MINING_REWARD)
+    last_block = blockchain.chain[-1]
+    previous_hash = blockchain.hash(last_block)
+    block = blockchain.create_block(nonce, previous_hash)
+    response = {
+        "message": "New block created",
+        "block_number": block["block_number"],
+        "transactions": block["transactions"],
+        "nonce": block["nonce"],
+        "previous_hash": block["previous_hash"],
+    }
+    return jsonify(response), 201
+
+
 @app.route("/transactions_new", methods=['POST'])
 def transactions_new():
     values = request.form
 
     # check required fields [Notes: This is just a demo, not production code, so not checking thoroughly, just doing
     # basic checks]
-    required = ['confirmation_sender_public_key', 'confirmation_recipient_public_key', 'transaction_signature', 'confirmation_amount']
+    required = ['confirmation_sender_public_key', 'confirmation_recipient_public_key', 'transaction_signature',
+                'confirmation_amount']
     if not all(k in values for k in required):
         return 'Missing Values', 400
 
