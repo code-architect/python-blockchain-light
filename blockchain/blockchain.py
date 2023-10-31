@@ -9,6 +9,8 @@ from collections import OrderedDict
 import binascii
 from Crypto.Signature import PKCS1_v1_5
 import json
+import requests
+from urllib.parse import urlparse
 
 MINING_SENDER = "blockchain"
 MINING_REWARD = 1
@@ -19,9 +21,21 @@ class Blockchain:
     def __init__(self):
         self.transactions = []
         self.chain = []
+        self.nodes = set()
         self.node_id = str(uuid4()).replace('-', '')
         # create the genesis block
         self.create_block(0, '00')
+
+    def register_node(self, node_url):
+        parsed_url = urlparse(node_url)
+        if parsed_url.netloc:
+            self.nodes.add(parsed_url.netloc)
+        elif parsed_url.path:
+            self.nodes.add(parsed_url.path)
+        else:
+            raise ValueError('Invalid URL')
+
+
 
     def create_block(self, nonce, previous_hash):
         """
@@ -70,6 +84,50 @@ class Blockchain:
         h = hashlib.new('sha256')
         h.update(block_string)
         return h.hexdigest()
+
+    def resolve_conflicts(self):
+        neighbours = self.nodes
+        new_chain = None
+
+        max_length = len(self.chain)
+        for node in neighbours:
+            response = requests.get('http://' + node + '/chain')
+            if response.status_code == 200:
+                length = response.json()['length']
+                chain = response.json()['chain']
+
+                if length > max_length and self.valid_chain(chain):
+                    max_length = length
+                    new_chain = chain
+
+        if new_chain:
+            self.chain = new_chain
+            return True
+        return False
+
+    def valid_chain(self, chain):
+        # iterate throw blocks one by one
+        last_block = chain[0]
+        current_index = 1
+
+        while current_index < len(chain):
+            block = chain[current_index]
+            if block['previous_hash'] != self.hash(last_block):
+                return False
+
+            # removing the last miner reward transaction
+            transactions = block['transactions'][:-1]
+            transaction_elements = ['sender_public_key', 'recipient_public_key', 'amount']
+            transactions = [OrderedDict((k, transaction[k]) for k in transaction_elements) for transaction in
+                            transactions]
+
+            if not self.valid_proof(transactions, block['previous_hash'], block['nonce'], MINING_DIFFICULTY):
+                return False
+
+            last_block = block
+            current_index += 1
+
+        return True
 
     def submit_transaction(self, sender_public_key, recipient_public_key, signature, amount):
         # Signature validation
@@ -161,6 +219,30 @@ def transactions_new():
     else:
         response = {"message": "Added Transaction " + str(transaction_results)}
         return jsonify(response), 201
+
+
+@app.route("/get_nodes", methods=['GET'])
+def get_nodes():
+    nodes = list(blockchain.nodes)
+    response = {"nodes": nodes}
+    return jsonify(response), 200
+
+
+@app.route("/register_node", methods=['GET'])
+def register_node():
+    values = request.form
+    nodes = values.get('nodes').replace(' ', '').split(',')
+    if nodes is None:
+        return 'Error: Supply valid nodes', 400
+
+    for node in nodes:
+        blockchain.register_node(node)
+
+    response = {
+        "message": "Added nodes",
+        "total_nodes": [node for nodes in blockchain.nodes]
+    }
+    return jsonify(response), 200
 
 
 if __name__ == '__main__':
