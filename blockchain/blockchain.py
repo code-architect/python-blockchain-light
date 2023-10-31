@@ -1,3 +1,4 @@
+import hashlib
 from uuid import uuid4
 from Crypto.Hash import SHA
 from Crypto.PublicKey import RSA
@@ -7,9 +8,11 @@ from flask_cors import CORS
 from collections import OrderedDict
 import binascii
 from Crypto.Signature import PKCS1_v1_5
+import json
 
 MINING_SENDER = "blockchain"
 MINING_REWARD = 1
+MINING_DIFFICULTY = 2
 
 
 class Blockchain:
@@ -46,11 +49,27 @@ class Blockchain:
         except ValueError:
             return False
 
+    def valid_proof(self, transactions, last_hash, nonce, difficulty=MINING_DIFFICULTY):
+        guess = (str(transactions) + str(last_hash) + str(nonce)).encode('utf8')
+        h = hashlib.new('sha256')
+        h.update(guess)
+        guess_hash = h.hexdigest()
+        return guess_hash[:difficulty] == '0' * difficulty
+
     def proof_of_work(self):
-        return 123
+        last_block = self.chain[-1]
+        last_hash = self.hash(last_block)
+        nonce = 0
+        while self.valid_proof(self.transactions, last_hash, nonce) is False:
+            nonce += 1
+        return nonce
 
     def hash(self, block):
-        return 'abs'
+        # we must ensure that the dictionary is ordered
+        block_string = json.dumps(block, sort_keys=True).encode('utf8')
+        h = hashlib.new('sha256')
+        h.update(block_string)
+        return h.hexdigest()
 
     def submit_transaction(self, sender_public_key, recipient_public_key, signature, amount):
         # Signature validation
