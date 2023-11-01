@@ -31,11 +31,10 @@ class Blockchain:
         if parsed_url.netloc:
             self.nodes.add(parsed_url.netloc)
         elif parsed_url.path:
-            self.nodes.add(parsed_url.path)
+            true_url = parsed_url.scheme + ":" + parsed_url.path
+            self.nodes.add(true_url)
         else:
             raise ValueError('Invalid URL')
-
-
 
     def create_block(self, nonce, previous_hash):
         """
@@ -163,6 +162,11 @@ def index():
     return render_template('./index.html')
 
 
+@app.route("/configure")
+def configure():
+    return render_template('./configure.html')
+
+
 @app.route("/transactions_get", methods=['GET'])
 def get_transactions():
     transactions = blockchain.transactions
@@ -228,19 +232,38 @@ def get_nodes():
     return jsonify(response), 200
 
 
-@app.route("/register_node", methods=['GET'])
+@app.route('/resolve_nodes', methods=['GET'])
+def consensus():
+    replaced = blockchain.resolve_conflicts()
+
+    if replaced:
+        response = {
+            'message': 'Our chain was replaced',
+            'new_chain': blockchain.chain
+        }
+    else:
+        response = {
+            'message': 'Our chain is authoritative',
+            'chain': blockchain.chain
+        }
+    return jsonify(response), 200
+
+
+@app.route("/register_node", methods=['POST'])
 def register_node():
     values = request.form
+    # 127.0.0.1:5002,127.0.0.1:5003, 127.0.0.1:5004
     nodes = values.get('nodes').replace(' ', '').split(',')
+
     if nodes is None:
-        return 'Error: Supply valid nodes', 400
+        return 'Error: Please supply a valid list of nodes', 400
 
     for node in nodes:
         blockchain.register_node(node)
 
     response = {
-        "message": "Added nodes",
-        "total_nodes": [node for nodes in blockchain.nodes]
+        'message': 'Nodes have been added',
+        'total_nodes': [node for node in blockchain.nodes]
     }
     return jsonify(response), 200
 
